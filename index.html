@@ -79,6 +79,8 @@ svg{display:block}
 .item.dragging{z-index:5;box-shadow:0 8px 22px rgba(0,0,0,.22);border-radius:10px;border-bottom-color:transparent}
 .item.dragging .handle{color:var(--paper-ink);cursor:grabbing}
 body.is-dragging{user-select:none;-webkit-user-select:none}
+.handle svg{pointer-events:none}
+.handle *{touch-action:none}
 .item.shifting{transition:transform .18s ease}
 .storage-warn{margin:0 14px 14px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:14px;line-height:1.45;color:var(--ink)}
 .storage-warn[hidden]{display:none}
@@ -343,44 +345,69 @@ function itemRow(it) {
   del.onpointerdown = e => e.preventDefault(); // garder le clavier ouvert
   del.onclick = () => removeItem(it.id, false);
   const handle = el('div', 'handle'); handle.setAttribute('aria-label', 'Déplacer'); handle.innerHTML = GRIP;
-  handle.addEventListener('pointerdown', e => startDrag(e, row, handle));
+  dragBind(handle, row);
   row.append(handle, cb, ta, del);
   requestAnimationFrame(() => autosize(ta));
   return row;
 }
 
 /* ---------- Glisser-déposer ----------
-   La ligne déplacée n'est jamais retirée du DOM pendant le geste :
-   les autres lignes glissent par transformation, l'ordre est appliqué au relâcher. */
+   Événements tactiles plutôt que pointeur : sur Chrome Android, seul
+   preventDefault() sur touchmove empêche vraiment la page de défiler
+   à la place de la ligne. La ligne reste en place dans le document
+   pendant le geste ; l'ordre est appliqué au relâcher. */
 let drag = null;
-function startDrag(e, row, handle) {
-  if (drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
-  e.preventDefault();
+
+function dragBind(handle, row) {
+  handle.addEventListener('touchstart', e => {
+    if (drag || e.touches.length !== 1) return;
+    e.preventDefault();
+    beginDrag(row, e.touches[0].clientY);
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
+  }, { passive: false });
+  handle.addEventListener('mousedown', e => {
+    if (drag || e.button !== 0) return;
+    e.preventDefault();
+    beginDrag(row, e.clientY);
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  });
+}
+function onTouchMove(e) { if (!drag) return; e.preventDefault(); drag.y = e.touches[0].clientY; layoutDrag(); }
+function onTouchEnd() {
+  window.removeEventListener('touchmove', onTouchMove);
+  window.removeEventListener('touchend', onTouchEnd);
+  window.removeEventListener('touchcancel', onTouchEnd);
+  endDrag();
+}
+function onMouseMove(e) { if (!drag) return; drag.y = e.clientY; layoutDrag(); }
+function onMouseUp() {
+  window.removeEventListener('mousemove', onMouseMove);
+  window.removeEventListener('mouseup', onMouseUp);
+  endDrag();
+}
+
+function beginDrag(row, clientY) {
   const body = $('#edBody');
   const rows = [...$('#items').children];
   const from = rows.indexOf(row);
+  if (from < 0) return;
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   drag = {
-    row, handle, rows, from, to: from, pid: e.pointerId,
-    startY: e.clientY, y: e.clientY, startScroll: body.scrollTop, body, raf: 0,
+    row, rows, from, to: from, body, raf: 0,
+    startY: clientY, y: clientY, startScroll: body.scrollTop,
     h: row.offsetHeight,
     centers: rows.map(r => r.offsetTop + r.offsetHeight / 2)
   };
-  try { handle.setPointerCapture(e.pointerId); } catch (_) {}
   row.classList.add('dragging'); document.body.classList.add('is-dragging');
   rows.forEach(r => { if (r !== row) r.classList.add('shifting'); });
   if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
-  window.addEventListener('pointermove', onDragMove, { passive: false });
-  window.addEventListener('pointerup', onDragEnd);
-  window.addEventListener('pointercancel', onDragEnd);
-  handle.addEventListener('lostpointercapture', onDragEnd);
   drag.raf = requestAnimationFrame(autoScroll);
 }
-function onDragMove(ev) {
-  if (!drag || ev.pointerId !== drag.pid) return;
-  ev.preventDefault(); drag.y = ev.clientY; layoutDrag();
-}
 function layoutDrag() {
-  const d = drag;
+  const d = drag; if (!d) return;
   const dy = d.y - d.startY + (d.body.scrollTop - d.startScroll);
   d.row.style.transform = `translateY(${dy}px)`;
   const mid = d.centers[d.from] + dy;
@@ -396,15 +423,10 @@ function layoutDrag() {
     r.style.transform = shift ? `translateY(${shift}px)` : '';
   });
 }
-function onDragEnd(ev) {
-  if (!drag || (ev && ev.pointerId !== undefined && ev.pointerId !== drag.pid)) return;
-  const d = drag; drag = null;
+function endDrag() {
+  const d = drag; if (!d) return;
+  drag = null;
   cancelAnimationFrame(d.raf);
-  window.removeEventListener('pointermove', onDragMove);
-  window.removeEventListener('pointerup', onDragEnd);
-  window.removeEventListener('pointercancel', onDragEnd);
-  d.handle.removeEventListener('lostpointercapture', onDragEnd);
-  try { d.handle.releasePointerCapture(d.pid); } catch (_) {}
   d.rows.forEach(r => { r.style.transform = ''; r.classList.remove('shifting'); });
   d.row.classList.remove('dragging'); document.body.classList.remove('is-dragging');
   if (d.to !== d.from) {
