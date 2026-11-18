@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="theme-color" content="#f3f2ee">
+<title>Mes listes</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Mes listes">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f3f2ee; --surface:#ffffff; --ink:#1c1b19; --muted:#6c6a63; --line:rgba(28,27,25,.12);
+  --sheet:#ffffff; --fab:#1c1b19; --fab-ink:#ffffff; --danger:#b3261e;
+  --paper-ink:#1c1b19; --paper-muted:rgba(28,27,25,.55); --paper-line:rgba(28,27,25,.14);
+  --display:"Bricolage Grotesque", "Segoe UI", Roboto, system-ui, sans-serif;
+  --text:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --list:#b3ffe6;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#171715; --surface:#242421; --ink:#f0eee7; --muted:#a3a198; --line:rgba(240,238,231,.14);
+    --sheet:#242421; --fab:#f0eee7; --fab-ink:#171715; --danger:#ff8a80;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#171715; --surface:#242421; --ink:#f0eee7; --muted:#a3a198; --line:rgba(240,238,231,.14);
+  --sheet:#242421; --fab:#f0eee7; --fab-ink:#171715; --danger:#ff8a80;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--text);font-size:17px;overscroll-behavior:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+button:focus-visible,textarea:focus-visible,input:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+svg{display:block}
+.view{position:fixed;inset:0;display:flex;flex-direction:column}
+.view[hidden]{display:none}
+
+/* ---------- Accueil ---------- */
+.topbar{display:flex;align-items:center;gap:4px;padding:calc(env(safe-area-inset-top) + 10px) 8px 10px 20px}
+.topbar h1{flex:1;margin:0;font-family:var(--display);font-weight:700;font-size:30px;letter-spacing:-.02em}
+.icon-btn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center}
+.icon-btn:active{background:var(--line)}
+.home-scroll{flex:1;overflow-y:auto;padding:6px 14px calc(110px + env(safe-area-inset-bottom))}
+.grid{columns:2;column-gap:12px}
+.card{display:block;width:100%;break-inside:avoid;margin:0 0 12px;text-align:left;border-radius:6px 18px 18px 18px;
+  padding:14px 14px 12px;color:var(--paper-ink);background:var(--list);box-shadow:0 1px 0 rgba(0,0,0,.08)}
+.card:active{transform:scale(.98)}
+.card-title{font-family:var(--display);font-weight:700;font-size:18px;line-height:1.2;margin-bottom:8px;word-break:break-word}
+.card-title.untitled{color:var(--paper-muted);font-weight:500}
+.card-items{list-style:none;margin:0;padding:0;font-size:14px;line-height:1.35}
+.card-items li{display:flex;gap:7px;margin:3px 0;word-break:break-word}
+.card-items li::before{content:"";flex:none;width:11px;height:11px;margin-top:3px;border:1.6px solid currentColor;border-radius:2px}
+.card-items li.done{color:var(--paper-muted);text-decoration:line-through}
+.card-items li.done::before{background:currentColor}
+.card-meta{margin-top:10px;font-size:13px;color:var(--paper-muted)}
+.progress{height:3px;border-radius:2px;background:var(--paper-line);margin-top:6px;overflow:hidden}
+.progress i{display:block;height:100%;background:var(--paper-ink);opacity:.55}
+.empty{padding:22vh 30px 0;text-align:center;color:var(--muted);line-height:1.5}
+.empty strong{display:block;font-family:var(--display);font-size:22px;color:var(--ink);margin-bottom:6px}
+.fab{position:fixed;right:20px;bottom:calc(22px + env(safe-area-inset-bottom));width:64px;height:64px;border-radius:50%;
+  background:var(--fab);color:var(--fab-ink);display:grid;place-items:center;box-shadow:0 6px 18px rgba(0,0,0,.25)}
+.fab:active{transform:scale(.94)}
+
+/* ---------- Liste ---------- */
+#editor{background:var(--list);color:var(--paper-ink);transition:background .25s}
+#editor .icon-btn:active{background:var(--paper-line)}
+.ed-top{display:flex;align-items:center;gap:2px;padding:calc(env(safe-area-inset-top) + 8px) 6px 8px 4px;border-bottom:1px solid var(--paper-line)}
+#title{flex:1;min-width:0;border:0;background:none;color:inherit;font-family:var(--display);font-weight:700;font-size:26px;letter-spacing:-.01em;padding:6px 6px}
+#title::placeholder{color:var(--paper-muted)}
+#title:focus{outline:none}
+.ed-body{flex:1;overflow-y:auto;padding:8px 0 40px;display:flex;flex-direction:column}
+.item{display:flex;align-items:flex-start;gap:2px;padding:0 6px 0 0;border-bottom:1px solid var(--paper-line);background:var(--list);position:relative}
+.handle{flex:none;width:34px;height:48px;display:grid;place-items:center;color:var(--paper-muted);touch-action:none;cursor:grab}
+.item.dragging{z-index:5;box-shadow:0 8px 22px rgba(0,0,0,.22);border-radius:10px;border-bottom-color:transparent}
+.item.dragging .handle{color:var(--paper-ink);cursor:grabbing}
+body.is-dragging{user-select:none;-webkit-user-select:none}
+.item.shifting{transition:transform .18s ease}
+.storage-warn{margin:0 14px 14px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:14px;line-height:1.45;color:var(--ink)}
+.storage-warn[hidden]{display:none}
+.storage-warn b{display:block;margin-bottom:2px}
+.cb{flex:none;width:44px;height:48px;display:grid;place-items:center}
+.cb span{width:24px;height:24px;border:2.4px solid var(--paper-ink);border-radius:4px;display:grid;place-items:center;transition:background .15s}
+.cb svg{opacity:0;transform:scale(.6);transition:.15s}
+.item.done .cb span{background:var(--paper-ink)}
+.item.done .cb svg{opacity:1;transform:none}
+.item textarea{flex:1;min-width:0;resize:none;border:0;background:none;color:inherit;font:inherit;font-size:18px;line-height:1.4;
+  padding:12px 0;margin:0;overflow:hidden;min-height:48px}
+.item textarea:focus{outline:none}
+.item.done textarea{text-decoration:line-through;color:var(--paper-muted)}
+.del{flex:none;width:44px;height:48px;display:grid;place-items:center;opacity:0;transition:opacity .15s}
+.item:focus-within .del{opacity:1}
+.add-row{display:flex;align-items:center;gap:6px;padding:0 12px;height:52px;width:100%;color:var(--paper-muted);font-size:18px;text-align:left}
+.add-row .plus{width:44px;display:grid;place-items:center}
+.filler{flex:1;min-height:120px}
+.ed-bottom{display:flex;align-items:center;gap:4px;padding:6px 10px calc(6px + env(safe-area-inset-bottom));border-top:1px solid var(--paper-line)}
+.count{flex:1;text-align:right;font-size:14px;color:var(--paper-muted);padding-right:8px}
+
+/* ---------- Feuilles ---------- */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+.backdrop.on{opacity:1;pointer-events:auto}
+.sheet{position:fixed;left:0;right:0;bottom:0;z-index:11;background:var(--sheet);color:var(--ink);border-radius:22px 22px 0 0;
+  padding:10px 16px calc(18px + env(safe-area-inset-bottom));transform:translateY(105%);transition:transform .25s ease;max-width:640px;margin:0 auto}
+.sheet.on{transform:none}
+.sheet .grab{width:40px;height:4px;border-radius:2px;background:var(--line);margin:0 auto 12px}
+.sheet h2{font-family:var(--display);font-size:19px;font-weight:700;margin:4px 6px 14px}
+.swatches{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;padding:0 4px 8px}
+.sw{aspect-ratio:1;border-radius:50%;border:1.5px solid var(--line);display:grid;place-items:center;color:#1c1b19}
+.sw svg{opacity:0}
+.sw.on svg{opacity:1}
+.menu-item{display:flex;align-items:center;gap:16px;width:100%;padding:14px 8px;border-radius:12px;text-align:left;font-size:17px}
+.menu-item:active{background:var(--line)}
+.menu-item.danger{color:var(--danger)}
+.menu-item small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.preview{white-space:pre-wrap;font-size:14px;line-height:1.45;background:var(--bg);border-radius:12px;padding:12px 14px;margin:0 4px 10px;max-height:28vh;overflow:auto;color:var(--muted)}
+
+.toast{position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom));transform:translate(-50%,20px);background:var(--fab);color:var(--fab-ink);
+  padding:11px 18px;border-radius:22px;font-size:15px;opacity:0;pointer-events:none;transition:.2s;z-index:20;white-space:nowrap}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion: reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<!-- Accueil -->
+<section id="home" class="view">
+  <header class="topbar">
+    <h1>Mes listes</h1>
+    <button class="icon-btn" id="homeMenuBtn" aria-label="Plus d'options">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+    </button>
+  </header>
+  <div class="home-scroll">
+    <div class="storage-warn" id="storageWarn" hidden>
+      <b>Vos listes ne seront pas conservées</b>
+      Ouverte comme fichier, l'app perd ses données à la fermeture du navigateur. Pensez à exporter une sauvegarde (menu ⋮), ou utilisez la version en ligne.
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty" hidden><strong>Aucune liste</strong>Touchez + pour créer votre première liste.</div>
+  </div>
+  <button class="fab" id="newBtn" aria-label="Nouvelle liste">
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+  </button>
+</section>
+
+<!-- Liste -->
+<section id="editor" class="view" hidden>
+  <header class="ed-top">
+    <button class="icon-btn" id="backBtn" aria-label="Retour">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 6l-6 6 6 6"/></svg>
+    </button>
+    <input id="title" placeholder="Titre" autocomplete="off" enterkeyhint="next">
+    <button class="icon-btn" id="shareBtn" aria-label="Partager">
+      <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="19" r="2.6"/><path d="M8.3 10.8l7.4-4.4M8.3 13.2l7.4 4.4"/></svg>
+    </button>
+    <button class="icon-btn" id="edMenuBtn" aria-label="Plus d'options">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
+    </button>
+  </header>
+  <div class="ed-body" id="edBody">
+    <div id="items"></div>
+    <button class="add-row" id="addRow">
+      <span class="plus"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span>
+      Ajouter un élément
+    </button>
+    <div class="filler" id="filler"></div>
+  </div>
+  <footer class="ed-bottom">
+    <button class="icon-btn" id="colorBtn" aria-label="Choisir une couleur">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4c0-4.4-4-8-9-8zM6.5 12a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3-4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm5 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm3 4a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>
+    </button>
+    <div class="count" id="count"></div>
+  </footer>
+</section>
+
+<div class="backdrop" id="backdrop"></div>
+
+<div class="sheet" id="colorSheet" role="dialog" aria-label="Choisir une couleur">
+  <div class="grab"></div>
+  <h2>Couleur de la liste</h2>
+  <div class="swatches" id="swatches"></div>
+</div>
+
+<div class="sheet" id="shareSheet" role="dialog" aria-label="Partager">
+  <div class="grab"></div>
+  <h2>Partager la liste</h2>
+  <div class="preview" id="preview"></div>
+  <div id="shareOptions"></div>
+</div>
+
+<div class="sheet" id="menuSheet" role="dialog" aria-label="Options">
+  <div class="grab"></div>
+  <div id="menuOptions"></div>
+</div>
+
+<input type="file" id="importFile" accept=".json,application/json" hidden>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+const KEY = 'mes-listes.v1';
+const COLORS = ['#ffffff','#fff59d','#ffcc80','#ffb884','#ff9e80','#ff8a80','#eeff99','#b3ffe6','#82d0ff','#ccc2ff','#f8d1ff','#dce6ee'];
+const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+const CHECK_DARK = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
+const GRIP = '<svg width="14" height="22" viewBox="0 0 14 22" fill="currentColor"><circle cx="4" cy="4" r="1.8"/><circle cx="10" cy="4" r="1.8"/><circle cx="4" cy="11" r="1.8"/><circle cx="10" cy="11" r="1.8"/><circle cx="4" cy="18" r="1.8"/><circle cx="10" cy="18" r="1.8"/></svg>';
+const XICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+
+const $ = s => document.querySelector(s);
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+
+/* ---------- Stockage ---------- */
+let state = { lists: [] };
+function load() {
+  try { const raw = localStorage.getItem(KEY); if (raw) state = JSON.parse(raw); } catch (e) {}
+  if (!state || !Array.isArray(state.lists)) state = { lists: [] };
+}
+let saveTimer;
+function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 250); }
+function saveNow() {
+  clearTimeout(saveTimer);
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { toast('Sauvegarde impossible sur cet appareil'); }
+}
+window.addEventListener('pagehide', saveNow);
+document.addEventListener('visibilitychange', () => { if (document.hidden) saveNow(); });
+
+let currentId = null;
+const getList = () => state.lists.find(l => l.id === currentId);
+function touch() { const l = getList(); if (l) l.updated = Date.now(); save(); }
+
+/* ---------- Toast ---------- */
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+/* ---------- Accueil ---------- */
+function renderHome() {
+  const grid = $('#grid'); grid.innerHTML = '';
+  const lists = [...state.lists].sort((a, b) => b.updated - a.updated);
+  $('#empty').hidden = lists.length > 0;
+  for (const l of lists) {
+    const filled = l.items.filter(i => i.text.trim());
+    const done = filled.filter(i => i.done).length;
+    const card = el('button', 'card');
+    card.style.setProperty('--list', l.color);
+    const t = el('div', 'card-title' + (l.title.trim() ? '' : ' untitled'));
+    t.textContent = l.title.trim() || 'Sans titre';
+    const ul = el('ul', 'card-items');
+    filled.slice(0, 6).forEach(i => { const li = el('li', i.done ? 'done' : ''); li.textContent = i.text; ul.appendChild(li); });
+    const meta = el('div', 'card-meta');
+    if (filled.length) {
+      meta.textContent = filled.length > 6 ? `+ ${filled.length - 6} autres · ${done}/${filled.length}` : `${done}/${filled.length}`;
+      const p = el('div', 'progress'); const bar = el('i'); bar.style.width = (done / filled.length * 100) + '%'; p.appendChild(bar);
+      card.append(t, ul, meta, p);
+    } else { meta.textContent = 'Liste vide'; card.append(t, meta); }
+    card.onclick = () => openList(l.id);
+    grid.appendChild(card);
+  }
+}
+
+function newList() {
+  const last = [...state.lists].sort((a, b) => b.updated - a.updated)[0];
+  const l = { id: uid(), title: '', color: last ? last.color : '#b3ffe6', items: [{ id: uid(), text: '', done: false }], updated: Date.now() };
+  state.lists.push(l); save();
+  openList(l.id, true);
+}
+
+/* ---------- Navigation (bouton retour Android) ---------- */
+function openList(id, focusFirst) {
+  currentId = id;
+  $('#home').hidden = true; $('#editor').hidden = false;
+  try { history.pushState({ v: 'list' }, ''); } catch (e) {}
+  renderEditor();
+  if (focusFirst) { const ta = $('#items textarea'); if (ta) ta.focus(); }
+}
+function closeList() {
+  if (!currentId) return;
+  closeSheets();
+  const l = getList();
+  if (l) {
+    l.items = l.items.filter(i => i.text.trim());
+    if (!l.title.trim() && !l.items.length) state.lists = state.lists.filter(x => x.id !== l.id);
+  }
+  saveNow();
+  currentId = null;
+  document.activeElement && document.activeElement.blur();
+  $('#editor').hidden = true; $('#home').hidden = false;
+  renderHome();
+}
+window.addEventListener('popstate', () => {
+  if (document.querySelector('.sheet.on')) { closeSheets(); if (currentId) try { history.pushState({ v: 'list' }, ''); } catch (e) {} return; }
+  closeList();
+});
+$('#backBtn').onclick = () => { try { history.back(); } catch (e) { closeList(); } setTimeout(() => { if (currentId) closeList(); }, 300); };
+
+/* ---------- Éditeur ---------- */
+function applyColor(c) {
+  $('#editor').style.setProperty('--list', c);
+  const m = document.querySelector('meta[name=theme-color]'); if (m) m.content = c;
+}
+function renderEditor() {
+  const l = getList(); if (!l) return;
+  applyColor(l.color);
+  $('#title').value = l.title;
+  const box = $('#items'); box.innerHTML = '';
+  l.items.forEach(it => box.appendChild(itemRow(it)));
+  updateCount();
+}
+function updateCount() {
+  const l = getList(); if (!l) return;
+  const filled = l.items.filter(i => i.text.trim());
+  const done = filled.filter(i => i.done).length;
+  $('#count').textContent = filled.length ? `${done} sur ${filled.length} fait${done > 1 ? 's' : ''}` : '';
+}
+function autosize(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+
+function itemRow(it) {
+  const row = el('div', 'item' + (it.done ? ' done' : '')); row.dataset.id = it.id;
+  const cb = el('button', 'cb'); cb.setAttribute('aria-label', 'Cocher'); cb.innerHTML = '<span>' + CHECK + '</span>';
+  cb.onclick = () => { it.done = !it.done; row.classList.toggle('done', it.done); touch(); updateCount(); };
+  const ta = document.createElement('textarea');
+  ta.rows = 1; ta.value = it.text; ta.enterKeyHint = 'next'; ta.setAttribute('aria-label', 'Élément');
+  ta.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); split(it, ta, ta.selectionStart, ta.selectionEnd); }
+    else if (e.key === 'Backspace' && ta.value === '') { e.preventDefault(); removeItem(it.id, true); }
+  });
+  ta.addEventListener('input', () => {
+    const nl = ta.value.indexOf('\n');
+    if (nl !== -1) { // repli si le clavier n'envoie pas "Enter"
+      const v = ta.value; ta.value = v.slice(0, nl) + v.slice(nl + 1);
+      split(it, ta, nl, nl); return;
+    }
+    it.text = ta.value; autosize(ta); touch(); updateCount();
+  });
+  const del = el('button', 'del'); del.setAttribute('aria-label', 'Supprimer l’élément'); del.innerHTML = XICON;
+  del.onpointerdown = e => e.preventDefault(); // garder le clavier ouvert
+  del.onclick = () => removeItem(it.id, false);
+  const handle = el('div', 'handle'); handle.setAttribute('aria-label', 'Déplacer'); handle.innerHTML = GRIP;
+  handle.addEventListener('pointerdown', e => startDrag(e, row, handle));
+  row.append(handle, cb, ta, del);
+  requestAnimationFrame(() => autosize(ta));
+  return row;
+}
+
+/* ---------- Glisser-déposer ----------
+   La ligne déplacée n'est jamais retirée du DOM pendant le geste :
+   les autres lignes glissent par transformation, l'ordre est appliqué au relâcher. */
+let drag = null;
+function startDrag(e, row, handle) {
+  if (drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+  e.preventDefault();
+  const body = $('#edBody');
+  const rows = [...$('#items').children];
+  const from = rows.indexOf(row);
+  drag = {
+    row, handle, rows, from, to: from, pid: e.pointerId,
+    startY: e.clientY, y: e.clientY, startScroll: body.scrollTop, body, raf: 0,
+    h: row.offsetHeight,
+    centers: rows.map(r => r.offsetTop + r.offsetHeight / 2)
+  };
+  try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+  row.classList.add('dragging'); document.body.classList.add('is-dragging');
+  rows.forEach(r => { if (r !== row) r.classList.add('shifting'); });
+  if (navigator.vibrate) try { navigator.vibrate(12); } catch (_) {}
+  window.addEventListener('pointermove', onDragMove, { passive: false });
+  window.addEventListener('pointerup', onDragEnd);
+  window.addEventListener('pointercancel', onDragEnd);
+  handle.addEventListener('lostpointercapture', onDragEnd);
+  drag.raf = requestAnimationFrame(autoScroll);
+}
+function onDragMove(ev) {
+  if (!drag || ev.pointerId !== drag.pid) return;
+  ev.preventDefault(); drag.y = ev.clientY; layoutDrag();
+}
+function layoutDrag() {
+  const d = drag;
+  const dy = d.y - d.startY + (d.body.scrollTop - d.startScroll);
+  d.row.style.transform = `translateY(${dy}px)`;
+  const mid = d.centers[d.from] + dy;
+  let to = d.from;
+  while (to < d.rows.length - 1 && mid > d.centers[to + 1]) to++;
+  while (to > 0 && mid < d.centers[to - 1]) to--;
+  d.to = to;
+  d.rows.forEach((r, i) => {
+    if (r === d.row) return;
+    let shift = 0;
+    if (d.from < to && i > d.from && i <= to) shift = -d.h;
+    if (d.from > to && i < d.from && i >= to) shift = d.h;
+    r.style.transform = shift ? `translateY(${shift}px)` : '';
+  });
+}
+function onDragEnd(ev) {
+  if (!drag || (ev && ev.pointerId !== undefined && ev.pointerId !== drag.pid)) return;
+  const d = drag; drag = null;
+  cancelAnimationFrame(d.raf);
+  window.removeEventListener('pointermove', onDragMove);
+  window.removeEventListener('pointerup', onDragEnd);
+  window.removeEventListener('pointercancel', onDragEnd);
+  d.handle.removeEventListener('lostpointercapture', onDragEnd);
+  try { d.handle.releasePointerCapture(d.pid); } catch (_) {}
+  d.rows.forEach(r => { r.style.transform = ''; r.classList.remove('shifting'); });
+  d.row.classList.remove('dragging'); document.body.classList.remove('is-dragging');
+  if (d.to !== d.from) {
+    const box = $('#items');
+    const others = d.rows.filter(r => r !== d.row);
+    box.insertBefore(d.row, others[d.to] || null);
+    const l = getList();
+    const [moved] = l.items.splice(d.from, 1);
+    l.items.splice(d.to, 0, moved);
+    touch();
+  }
+}
+function autoScroll() {
+  if (!drag) return;
+  const b = drag.body.getBoundingClientRect(); const zone = 70;
+  let v = 0;
+  if (drag.y < b.top + zone) v = -Math.ceil((b.top + zone - drag.y) / 6);
+  else if (drag.y > b.bottom - zone) v = Math.ceil((drag.y - (b.bottom - zone)) / 6);
+  if (v) { const before = drag.body.scrollTop; drag.body.scrollTop += v; if (drag.body.scrollTop !== before) layoutDrag(); }
+  drag.raf = requestAnimationFrame(autoScroll);
+}
+
+function addItem(afterId, text = '', caretStart = false) {
+  const l = getList();
+  const it = { id: uid(), text, done: false };
+  const idx = afterId ? l.items.findIndex(i => i.id === afterId) + 1 : l.items.length;
+  l.items.splice(idx, 0, it); touch();
+  const box = $('#items'); const row = itemRow(it);
+  box.insertBefore(row, box.children[idx] || null);
+  const ta = row.querySelector('textarea'); ta.focus();
+  const pos = caretStart ? 0 : ta.value.length; ta.setSelectionRange(pos, pos);
+  row.scrollIntoView({ block: 'nearest' });
+  updateCount();
+}
+function split(it, ta, start, end) {
+  const before = ta.value.slice(0, start), after = ta.value.slice(end);
+  it.text = before; ta.value = before; autosize(ta);
+  addItem(it.id, after, true);
+}
+function removeItem(id, focusPrev) {
+  const l = getList(); const idx = l.items.findIndex(i => i.id === id); if (idx < 0) return;
+  l.items.splice(idx, 1); touch();
+  const row = document.querySelector(`.item[data-id="${id}"]`);
+  const prev = row && row.previousElementSibling;
+  if (row) row.remove();
+  if (focusPrev && prev) { const ta = prev.querySelector('textarea'); ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+  updateCount();
+}
+function addAtEnd() {
+  const l = getList(); const last = l.items[l.items.length - 1];
+  if (last && !last.text.trim()) { const ta = document.querySelector(`.item[data-id="${last.id}"] textarea`); if (ta) { ta.focus(); return; } }
+  addItem(null);
+}
+$('#addRow').onclick = addAtEnd;
+$('#filler').onclick = addAtEnd;
+$('#title').addEventListener('input', e => { getList().title = e.target.value; touch(); });
+$('#title').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); const ta = $('#items textarea'); ta ? ta.focus() : addItem(null); }
+});
+
+/* ---------- Feuilles ---------- */
+function openSheet(id) {
+  document.activeElement && document.activeElement.blur();
+  closeSheets(); $('#backdrop').classList.add('on'); $(id).classList.add('on');
+}
+function closeSheets() { document.querySelectorAll('.sheet.on').forEach(s => s.classList.remove('on')); $('#backdrop').classList.remove('on'); }
+$('#backdrop').onclick = closeSheets;
+
+function menuItem(label, sub, onClick, danger) {
+  const b = el('button', 'menu-item' + (danger ? ' danger' : ''));
+  const d = el('div'); d.textContent = label;
+  if (sub) { const s = el('small'); s.textContent = sub; d.appendChild(s); }
+  b.appendChild(d); b.onclick = onClick; return b;
+}
+
+/* Couleur */
+$('#colorBtn').onclick = () => {
+  const l = getList(); const box = $('#swatches'); box.innerHTML = '';
+  COLORS.forEach(c => {
+    const b = el('button', 'sw' + (c === l.color ? ' on' : '')); b.style.background = c; b.innerHTML = CHECK_DARK;
+    b.setAttribute('aria-label', 'Couleur ' + c);
+    b.onclick = () => { l.color = c; touch(); applyColor(c); box.querySelectorAll('.sw').forEach(s => s.classList.toggle('on', s === b)); };
+    box.appendChild(b);
+  });
+  openSheet('#colorSheet');
+};
+
+/* Partage */
+function listText(l) {
+  const lines = [(l.title.trim() || 'Ma liste'), ''];
+  l.items.filter(i => i.text.trim()).forEach(i => lines.push((i.done ? '☑ ' : '☐ ') + i.text.trim()));
+  return lines.join('\n');
+}
+function openLink(url) { const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; document.body.appendChild(a); a.click(); a.remove(); }
+async function copyText(txt) {
+  try { await navigator.clipboard.writeText(txt); return true; }
+  catch (e) {
+    const t = document.createElement('textarea'); t.value = txt; t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.select(); let ok = false; try { ok = document.execCommand('copy'); } catch (_) {} t.remove(); return ok;
+  }
+}
+$('#shareBtn').onclick = () => {
+  const l = getList();
+  if (!l.items.some(i => i.text.trim())) { toast('La liste est vide'); return; }
+  const text = listText(l); const title = l.title.trim() || 'Ma liste';
+  $('#preview').textContent = text;
+  const box = $('#shareOptions'); box.innerHTML = '';
+  box.appendChild(menuItem('WhatsApp', null, () => { closeSheets(); openLink('https://wa.me/?text=' + encodeURIComponent(text)); }));
+  box.appendChild(menuItem('E-mail', null, () => { closeSheets(); openLink('mailto:?subject=' + encodeURIComponent(title) + '&body=' + encodeURIComponent(text)); }));
+  if (navigator.share) box.appendChild(menuItem('Autres applis…', 'SMS, Messenger, Notes…', async () => { closeSheets(); try { await navigator.share({ title, text }); } catch (e) {} }));
+  box.appendChild(menuItem('Copier le texte', null, async () => { closeSheets(); toast(await copyText(text) ? 'Texte copié' : 'Copie impossible'); }));
+  openSheet('#shareSheet');
+};
+
+/* Menu liste */
+$('#edMenuBtn').onclick = () => {
+  const l = getList(); const box = $('#menuOptions'); box.innerHTML = '';
+  box.appendChild(menuItem('Tout décocher', null, () => { l.items.forEach(i => i.done = false); touch(); closeSheets(); renderEditor(); }));
+  box.appendChild(menuItem('Retirer les éléments cochés', null, () => {
+    const n = l.items.filter(i => i.done).length; l.items = l.items.filter(i => !i.done); touch(); closeSheets(); renderEditor();
+    toast(n ? `${n} élément${n > 1 ? 's' : ''} retiré${n > 1 ? 's' : ''}` : 'Aucun élément coché');
+  }));
+  box.appendChild(menuItem('Dupliquer la liste', null, () => {
+    const copy = { ...l, id: uid(), title: (l.title.trim() || 'Sans titre') + ' (copie)', items: l.items.map(i => ({ ...i, id: uid() })), updated: Date.now() };
+    state.lists.push(copy); saveNow(); closeSheets(); toast('Liste dupliquée');
+  }));
+  const delBtn = menuItem('Supprimer la liste', null, () => {
+    if (!delBtn.dataset.armed) { delBtn.dataset.armed = '1'; delBtn.firstChild.firstChild.textContent = 'Toucher à nouveau pour supprimer'; return; }
+    state.lists = state.lists.filter(x => x.id !== l.id); saveNow(); closeSheets();
+    currentId = null; $('#editor').hidden = true; $('#home').hidden = false; renderHome(); toast('Liste supprimée');
+    try { history.back(); } catch (e) {}
+  }, true);
+  box.appendChild(delBtn);
+  openSheet('#menuSheet');
+};
+
+/* Menu accueil : sauvegarde */
+$('#homeMenuBtn').onclick = () => {
+  const box = $('#menuOptions'); box.innerHTML = '';
+  box.appendChild(menuItem('Exporter une sauvegarde', 'Fichier à garder en sécurité', async () => {
+    saveNow(); closeSheets();
+    const json = JSON.stringify(state, null, 2);
+    const filename = 'mes-listes-' + new Date().toISOString().slice(0, 10) + '.json';
+    let dl = null;
+    try { if (window.claude && window.claude.use) dl = await window.claude.use('downloads'); } catch (_) {}
+    if (dl) {
+      try { await dl.save({ filename, data: json }); toast('Sauvegarde exportée'); }
+      catch (err) { if (!err || err.code !== 'declined') toast('Export impossible ici'); }
+      return;
+    }
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    a.download = filename; document.body.appendChild(a); a.click(); a.remove(); toast('Sauvegarde exportée');
+  }));
+  box.appendChild(menuItem('Importer une sauvegarde', 'Ajoute les listes du fichier', () => { closeSheets(); $('#importFile').click(); }));
+  openSheet('#menuSheet');
+};
+$('#importFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!data || !Array.isArray(data.lists)) throw 0;
+    const ids = new Set(state.lists.map(l => l.id)); let n = 0;
+    data.lists.forEach(l => {
+      if (!l || !Array.isArray(l.items)) return;
+      state.lists.push({ id: ids.has(l.id) ? uid() : (l.id || uid()), title: String(l.title || ''), color: COLORS.includes(l.color) ? l.color : '#ffffff',
+        items: l.items.map(i => ({ id: uid(), text: String(i.text || ''), done: !!i.done })), updated: l.updated || Date.now() });
+      n++;
+    });
+    saveNow(); renderHome(); toast(`${n} liste${n > 1 ? 's' : ''} importée${n > 1 ? 's' : ''}`);
+  } catch (err) { toast('Fichier de sauvegarde illisible'); }
+};
+
+$('#newBtn').onclick = newList;
+
+load(); renderHome();
+if (/^(content|file):$/.test(location.protocol)) $('#storageWarn').hidden = false;
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+})();
+</script>
+</body>
+</html>
