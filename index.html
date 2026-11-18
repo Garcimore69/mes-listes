@@ -46,10 +46,25 @@ svg{display:block}
 .icon-btn{width:44px;height:44px;border-radius:50%;display:grid;place-items:center}
 .icon-btn:active{background:var(--line)}
 .home-scroll{flex:1;overflow-y:auto;padding:6px 14px calc(110px + env(safe-area-inset-bottom))}
-.grid{columns:2;column-gap:12px}
-.card{display:block;width:100%;break-inside:avoid;margin:0 0 12px;text-align:left;border-radius:6px 18px 18px 18px;
-  padding:14px 14px 12px;color:var(--paper-ink);background:var(--list);box-shadow:0 1px 0 rgba(0,0,0,.08)}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:start}
+.card{display:block;width:100%;margin:0;text-align:left;border-radius:6px 18px 18px 18px;cursor:pointer;
+  padding:14px 14px 12px;color:var(--paper-ink);background:var(--list);box-shadow:0 1px 0 rgba(0,0,0,.08);
+  touch-action:pan-y;-webkit-user-select:none;user-select:none}
 .card:active{transform:scale(.98)}
+.card.card-drag{position:fixed;margin:0;z-index:50;pointer-events:none;transition:none;
+  box-shadow:0 16px 36px rgba(0,0,0,.34);transform:scale(1.04)}
+.card-ph{border-radius:6px 18px 18px 18px;background:var(--line);opacity:.6}
+.card-moves{display:none;gap:8px;margin-top:10px}
+#home.reorder .card-moves{display:flex}
+#home.reorder .card{cursor:default}
+.card-moves button{flex:1;height:38px;display:grid;place-items:center;border-radius:10px;
+  border:1.5px solid var(--paper-line);color:var(--paper-ink)}
+.card-moves button:active{background:var(--paper-line)}
+.home-bar{display:none;align-items:center;gap:10px;padding:0 20px 10px;font-size:15px;color:var(--muted)}
+#home.reorder .home-bar{display:flex}
+.home-bar span{flex:1}
+.home-bar button{font-weight:700;padding:6px 12px;border-radius:999px;border:1.5px solid var(--ink)}
+#home.reorder .fab{display:none}
 .card-title{font-family:var(--display);font-weight:700;font-size:18px;line-height:1.2;margin-bottom:8px;word-break:break-word}
 .card-title.untitled{color:var(--paper-muted);font-weight:500}
 .card-items{list-style:none;margin:0;padding:0;font-size:14px;line-height:1.35}
@@ -146,6 +161,10 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
     </button>
   </header>
+  <div class="home-bar">
+    <span>Rangez les listes avec ◀ ▶</span>
+    <button id="homeReorderDone">Terminé</button>
+  </div>
   <div class="home-scroll">
     <div class="storage-warn" id="storageWarn" hidden>
       <b>Vos listes ne seront pas conservées</b>
@@ -218,7 +237,7 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
 
 <script>
 (() => {
-const APP_VERSION = '3';
+const APP_VERSION = '4';
 const KEY = 'mes-listes.v1';
 const COLORS = ['#ffffff','#fff59d','#ffcc80','#ffb884','#ff9e80','#ff8a80','#eeff99','#b3ffe6','#82d0ff','#ccc2ff','#f8d1ff','#dce6ee'];
 const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
@@ -236,6 +255,10 @@ let state = { lists: [] };
 function load() {
   try { const raw = localStorage.getItem(KEY); if (raw) state = JSON.parse(raw); } catch (e) {}
   if (!state || !Array.isArray(state.lists)) state = { lists: [] };
+  if (!state.ordered) { // reprise de l'ancien classement par date
+    state.lists.sort((a, b) => (b.updated || 0) - (a.updated || 0));
+    state.ordered = true;
+  }
 }
 let saveTimer;
 function save() { clearTimeout(saveTimer); saveTimer = setTimeout(saveNow, 250); }
@@ -261,12 +284,14 @@ function toast(msg) {
 /* ---------- Accueil ---------- */
 function renderHome() {
   const grid = $('#grid'); grid.innerHTML = '';
-  const lists = [...state.lists].sort((a, b) => b.updated - a.updated);
+  const lists = state.lists;
   $('#empty').hidden = lists.length > 0;
   for (const l of lists) {
     const filled = l.items.filter(i => i.text.trim());
     const done = filled.filter(i => i.done).length;
-    const card = el('button', 'card');
+    const card = el('div', 'card');
+    card.dataset.id = l.id;
+    card.setAttribute('role', 'button'); card.tabIndex = 0;
     card.style.setProperty('--list', l.color);
     const t = el('div', 'card-title' + (l.title.trim() ? '' : ' untitled'));
     t.textContent = l.title.trim() || 'Sans titre';
@@ -278,15 +303,119 @@ function renderHome() {
       const p = el('div', 'progress'); const bar = el('i'); bar.style.width = (done / filled.length * 100) + '%'; p.appendChild(bar);
       card.append(t, ul, meta, p);
     } else { meta.textContent = 'Liste vide'; card.append(t, meta); }
-    card.onclick = () => openList(l.id);
+    const moves = el('div', 'card-moves');
+    const prev = el('button'); prev.setAttribute('aria-label', 'Déplacer avant'); prev.innerHTML = ARROW;
+    prev.style.transform = 'rotate(-90deg)'; prev.onclick = e => { e.stopPropagation(); moveList(l.id, -1); };
+    const next = el('button'); next.setAttribute('aria-label', 'Déplacer après'); next.innerHTML = ARROW;
+    next.style.transform = 'rotate(90deg)'; next.onclick = e => { e.stopPropagation(); moveList(l.id, 1); };
+    moves.append(prev, next); card.appendChild(moves);
+    card.onclick = () => { if (!cardDrag && !justDragged && !$('#home').classList.contains('reorder')) openList(l.id); };
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); card.click(); } });
+    bindCardDrag(card);
     grid.appendChild(card);
   }
 }
 
+function moveList(id, dir) {
+  const i = state.lists.findIndex(l => l.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= state.lists.length) return;
+  [state.lists[i], state.lists[j]] = [state.lists[j], state.lists[i]];
+  save(); renderHome();
+  const c = document.querySelector(`.card[data-id="${id}"]`);
+  if (c) c.scrollIntoView({ block: 'nearest' });
+}
+
+/* Appui long sur une carte, puis glissé : la carte suit le doigt en position
+   fixe et un emplacement vide marque la place visée dans la grille. */
+let cardDrag = null, justDragged = false;
+
+function bindCardDrag(card) {
+  let timer = null, sx = 0, sy = 0, armed = false;
+  card.addEventListener('touchstart', e => {
+    if (cardDrag || e.touches.length !== 1) return;
+    if (e.target.closest('.card-moves')) return;
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; armed = false;
+    timer = setTimeout(() => { timer = null; armed = true; startCardDrag(card, sx, sy); }, 420);
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onEnd);
+    window.addEventListener('touchcancel', onEnd);
+  }, { passive: true });
+
+  function onMove(e) {
+    const t = e.touches[0];
+    if (armed) { e.preventDefault(); moveCardDrag(t.clientX, t.clientY); return; }
+    if (Math.abs(t.clientY - sy) > 10 || Math.abs(t.clientX - sx) > 10) { clearTimeout(timer); timer = null; detach(); }
+  }
+  function onEnd() { detach(); if (armed) { armed = false; endCardDrag(); } }
+  function detach() {
+    clearTimeout(timer); timer = null;
+    window.removeEventListener('touchmove', onMove);
+    window.removeEventListener('touchend', onEnd);
+    window.removeEventListener('touchcancel', onEnd);
+  }
+}
+
+function startCardDrag(card, x, y) {
+  const r = card.getBoundingClientRect();
+  const ph = el('div', 'card-ph');
+  ph.style.height = r.height + 'px';
+  card.parentNode.insertBefore(ph, card);
+  Object.assign(card.style, { width: r.width + 'px', height: r.height + 'px', left: r.left + 'px', top: r.top + 'px' });
+  card.classList.add('card-drag');
+  cardDrag = { card, ph, x, y, x0: x, y0: y, scroll: $('.home-scroll'), raf: 0 };
+  if (navigator.vibrate) try { navigator.vibrate(18); } catch (_) {}
+  cardDrag.raf = requestAnimationFrame(cardAutoScroll);
+}
+function moveCardDrag(x, y) {
+  const d = cardDrag; if (!d) return;
+  d.x = x; d.y = y;
+  d.card.style.transform = `translate(${x - d.x0}px, ${y - d.y0}px) scale(1.04)`;
+  placePh(x, y);
+}
+function placePh(x, y) {
+  const d = cardDrag;
+  const cards = [...$('#grid').children].filter(c => c !== d.card && c !== d.ph);
+  let best = null, bestDist = Infinity;
+  for (const c of cards) {
+    const r = c.getBoundingClientRect();
+    const dist = Math.hypot(x - (r.left + r.width / 2), y - (r.top + r.height / 2));
+    if (dist < bestDist) { bestDist = dist; best = { c, r }; }
+  }
+  if (!best) return;
+  const { c, r } = best;
+  const after = y > r.top + r.height * 0.75 || (y > r.top + r.height * 0.25 && x > r.left + r.width / 2);
+  $('#grid').insertBefore(d.ph, after ? c.nextSibling : c);
+}
+function cardAutoScroll() {
+  const d = cardDrag; if (!d) return;
+  const b = d.scroll.getBoundingClientRect(); const zone = 80;
+  let v = 0;
+  if (d.y < b.top + zone) v = -Math.ceil((b.top + zone - d.y) / 7);
+  else if (d.y > b.bottom - zone) v = Math.ceil((d.y - (b.bottom - zone)) / 7);
+  if (v) { const before = d.scroll.scrollTop; d.scroll.scrollTop += v; if (d.scroll.scrollTop !== before) placePh(d.x, d.y); }
+  d.raf = requestAnimationFrame(cardAutoScroll);
+}
+function endCardDrag() {
+  const d = cardDrag; if (!d) return;
+  cardDrag = null;
+  cancelAnimationFrame(d.raf);
+  const grid = $('#grid');
+  grid.insertBefore(d.card, d.ph);
+  d.ph.remove();
+  d.card.classList.remove('card-drag');
+  d.card.style.cssText = d.card.style.cssText.replace(/(width|height|left|top|transform):[^;]*;?/g, '');
+  d.card.style.setProperty('--list', state.lists.find(l => l.id === d.card.dataset.id).color);
+  const order = [...grid.children].map(c => c.dataset.id);
+  state.lists.sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+  saveNow();
+  justDragged = true; setTimeout(() => { justDragged = false; }, 400);
+}
+
 function newList() {
-  const last = [...state.lists].sort((a, b) => b.updated - a.updated)[0];
+  const last = state.lists[0];
   const l = { id: uid(), title: '', color: last ? last.color : '#b3ffe6', items: [{ id: uid(), text: '', done: false }], updated: Date.now() };
-  state.lists.push(l); save();
+  state.lists.unshift(l); save();
   openList(l.id, true);
 }
 
@@ -617,7 +746,7 @@ $('#edMenuBtn').onclick = () => {
   }));
   box.appendChild(menuItem('Dupliquer la liste', null, () => {
     const copy = { ...l, id: uid(), title: (l.title.trim() || 'Sans titre') + ' (copie)', items: l.items.map(i => ({ ...i, id: uid() })), updated: Date.now() };
-    state.lists.push(copy); saveNow(); closeSheets(); toast('Liste dupliquée');
+    state.lists.unshift(copy); saveNow(); closeSheets(); toast('Liste dupliquée');
   }));
   const delBtn = menuItem('Supprimer la liste', null, () => {
     if (!delBtn.dataset.armed) { delBtn.dataset.armed = '1'; delBtn.firstChild.firstChild.textContent = 'Toucher à nouveau pour supprimer'; return; }
@@ -632,6 +761,9 @@ $('#edMenuBtn').onclick = () => {
 /* Menu accueil : sauvegarde */
 $('#homeMenuBtn').onclick = () => {
   const box = $('#menuOptions'); box.innerHTML = '';
+  box.appendChild(menuItem('Réorganiser les listes', 'Avec les flèches ◀ ▶', () => {
+    closeSheets(); $('#home').classList.add('reorder');
+  }));
   box.appendChild(menuItem('Exporter une sauvegarde', 'Fichier à garder en sécurité', async () => {
     saveNow(); closeSheets();
     const json = JSON.stringify(state, null, 2);
@@ -667,6 +799,7 @@ $('#importFile').onchange = async e => {
   } catch (err) { toast('Fichier de sauvegarde illisible'); }
 };
 
+$('#homeReorderDone').onclick = () => $('#home').classList.remove('reorder');
 $('#reorderDone').onclick = () => $('#editor').classList.remove('reorder');
 $('#newBtn').onclick = newList;
 

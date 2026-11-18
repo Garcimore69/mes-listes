@@ -1,6 +1,6 @@
 // Service worker : met l'app en cache pour qu'elle fonctionne sans réseau.
 // Les listes elles-mêmes vivent dans localStorage, pas ici.
-const CACHE = 'mes-listes-v3';
+const CACHE = 'mes-listes-v4';
 const ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {
