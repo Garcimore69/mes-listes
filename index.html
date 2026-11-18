@@ -80,6 +80,16 @@ svg{display:block}
 .item.dragging .handle{color:var(--paper-ink);cursor:grabbing}
 body.is-dragging{user-select:none;-webkit-user-select:none}
 .handle svg{pointer-events:none}
+.mv{flex:none;width:40px;height:48px;display:none;place-items:center}
+#editor.reorder .mv{display:grid}
+#editor.reorder .del{display:none}
+#editor.reorder .item textarea{pointer-events:none}
+#editor.reorder .cb{pointer-events:none;opacity:.45}
+.reorder-bar{display:none;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--paper-line);font-size:15px}
+#editor.reorder .reorder-bar{display:flex}
+.reorder-bar span{flex:1;color:var(--paper-muted)}
+.reorder-bar button{font-weight:700;padding:6px 12px;border-radius:999px;border:1.5px solid var(--paper-ink)}
+.version{text-align:center;font-size:12px;color:var(--muted);padding:10px 0 2px}
 .handle *{touch-action:none}
 .item.shifting{transition:transform .18s ease}
 .storage-warn{margin:0 14px 14px;padding:12px 14px;border-radius:14px;background:var(--surface);border:1px solid var(--line);font-size:14px;line-height:1.45;color:var(--ink)}
@@ -163,6 +173,10 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg>
     </button>
   </header>
+  <div class="reorder-bar">
+    <span>Déplacez les éléments avec ▲ ▼</span>
+    <button id="reorderDone">Terminé</button>
+  </div>
   <div class="ed-body" id="edBody">
     <div id="items"></div>
     <button class="add-row" id="addRow">
@@ -204,11 +218,13 @@ body.is-dragging{user-select:none;-webkit-user-select:none}
 
 <script>
 (() => {
+const APP_VERSION = '3';
 const KEY = 'mes-listes.v1';
 const COLORS = ['#ffffff','#fff59d','#ffcc80','#ffb884','#ff9e80','#ff8a80','#eeff99','#b3ffe6','#82d0ff','#ccc2ff','#f8d1ff','#dce6ee'];
 const CHECK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
 const CHECK_DARK = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7"/></svg>';
 const GRIP = '<svg width="14" height="22" viewBox="0 0 14 22" fill="currentColor"><circle cx="4" cy="4" r="1.8"/><circle cx="10" cy="4" r="1.8"/><circle cx="4" cy="11" r="1.8"/><circle cx="10" cy="11" r="1.8"/><circle cx="4" cy="18" r="1.8"/><circle cx="10" cy="18" r="1.8"/></svg>';
+const ARROW = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V6M6 12l6-6 6 6"/></svg>';
 const XICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
 const $ = s => document.querySelector(s);
@@ -284,6 +300,7 @@ function openList(id, focusFirst) {
 }
 function closeList() {
   if (!currentId) return;
+  $('#editor').classList.remove('reorder');
   closeSheets();
   const l = getList();
   if (l) {
@@ -344,9 +361,15 @@ function itemRow(it) {
   const del = el('button', 'del'); del.setAttribute('aria-label', 'Supprimer l’élément'); del.innerHTML = XICON;
   del.onpointerdown = e => e.preventDefault(); // garder le clavier ouvert
   del.onclick = () => removeItem(it.id, false);
+  const up = el('button', 'mv'); up.setAttribute('aria-label', 'Monter'); up.innerHTML = ARROW;
+  up.onclick = () => moveItem(it.id, -1);
+  const down = el('button', 'mv'); down.setAttribute('aria-label', 'Descendre'); down.innerHTML = ARROW;
+  down.style.transform = 'rotate(180deg)';
+  down.onclick = () => moveItem(it.id, 1);
   const handle = el('div', 'handle'); handle.setAttribute('aria-label', 'Déplacer'); handle.innerHTML = GRIP;
   dragBind(handle, row);
-  row.append(handle, cb, ta, del);
+  bindLongPress(row, handle);
+  row.append(handle, cb, ta, del, up, down);
   requestAnimationFrame(() => autosize(ta));
   return row;
 }
@@ -389,12 +412,52 @@ function onMouseUp() {
   endDrag();
 }
 
+function bindLongPress(row, handle) {
+  let timer = null, sy = 0, started = false;
+  row.addEventListener('touchstart', e => {
+    if (drag || e.touches.length !== 1) return;
+    if (handle.contains(e.target)) return;           // la poignée a son propre geste
+    sy = e.touches[0].clientY; started = false;
+    timer = setTimeout(() => {
+      timer = null; started = true;
+      beginDrag(row, sy);
+      if (navigator.vibrate) try { navigator.vibrate(18); } catch (_) {}
+    }, 420);
+    window.addEventListener('touchmove', onLPMove, { passive: false });
+    window.addEventListener('touchend', onLPEnd);
+    window.addEventListener('touchcancel', onLPEnd);
+  }, { passive: true });
+  function onLPMove(e) {
+    const y = e.touches[0].clientY;
+    if (started) { e.preventDefault(); drag && (drag.y = y, layoutDrag()); return; }
+    if (Math.abs(y - sy) > 10) { clearTimeout(timer); timer = null; onLPEnd(); }
+  }
+  function onLPEnd() {
+    clearTimeout(timer); timer = null;
+    window.removeEventListener('touchmove', onLPMove);
+    window.removeEventListener('touchend', onLPEnd);
+    window.removeEventListener('touchcancel', onLPEnd);
+    if (started) { started = false; endDrag(); }
+  }
+}
+
+function moveItem(id, dir) {
+  const l = getList();
+  const i = l.items.findIndex(x => x.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= l.items.length) return;
+  [l.items[i], l.items[j]] = [l.items[j], l.items[i]];
+  touch();
+  const box = $('#items'), rows = [...box.children];
+  box.insertBefore(rows[i], dir < 0 ? rows[j] : rows[j].nextSibling);
+  rows[i].scrollIntoView({ block: 'nearest' });
+}
+
 function beginDrag(row, clientY) {
   const body = $('#edBody');
   const rows = [...$('#items').children];
   const from = rows.indexOf(row);
   if (from < 0) return;
-  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   drag = {
     row, rows, from, to: from, body, raf: 0,
     startY: clientY, y: clientY, startScroll: body.scrollTop,
@@ -544,6 +607,9 @@ $('#shareBtn').onclick = () => {
 /* Menu liste */
 $('#edMenuBtn').onclick = () => {
   const l = getList(); const box = $('#menuOptions'); box.innerHTML = '';
+  box.appendChild(menuItem('Réorganiser les éléments', 'Avec les flèches ▲ ▼', () => {
+    closeSheets(); $('#editor').classList.add('reorder');
+  }));
   box.appendChild(menuItem('Tout décocher', null, () => { l.items.forEach(i => i.done = false); touch(); closeSheets(); renderEditor(); }));
   box.appendChild(menuItem('Retirer les éléments cochés', null, () => {
     const n = l.items.filter(i => i.done).length; l.items = l.items.filter(i => !i.done); touch(); closeSheets(); renderEditor();
@@ -581,6 +647,8 @@ $('#homeMenuBtn').onclick = () => {
     a.download = filename; document.body.appendChild(a); a.click(); a.remove(); toast('Sauvegarde exportée');
   }));
   box.appendChild(menuItem('Importer une sauvegarde', 'Ajoute les listes du fichier', () => { closeSheets(); $('#importFile').click(); }));
+  const v = el('div', 'version'); v.textContent = 'Mes listes — version ' + APP_VERSION;
+  box.appendChild(v);
   openSheet('#menuSheet');
 };
 $('#importFile').onchange = async e => {
@@ -599,6 +667,7 @@ $('#importFile').onchange = async e => {
   } catch (err) { toast('Fichier de sauvegarde illisible'); }
 };
 
+$('#reorderDone').onclick = () => $('#editor').classList.remove('reorder');
 $('#newBtn').onclick = newList;
 
 load(); renderHome();
